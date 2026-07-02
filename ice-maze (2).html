@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ice Maze — frozen inside the fog</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(ellipse at 50% 0%, #10334a 0%, #071c2b 55%, #030f18 100%);
+    font-family: 'Outfit', 'Segoe UI', sans-serif;
+    color: #eaf6fb;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 16px 48px;
+  }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: #5fa8c9;
+    margin: 0 0 6px;
+  }
+
+  h1 {
+    font-size: clamp(28px, 6vw, 40px);
+    font-weight: 700;
+    margin: 0 0 6px;
+    letter-spacing: 0.02em;
+    background: linear-gradient(180deg, #f2fbff 0%, #9fe4ff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .sub {
+    font-size: 14px;
+    color: #8fb8cc;
+    margin: 0 0 22px;
+    text-align: center;
+    max-width: 420px;
+    line-height: 1.5;
+  }
+
+  .stats {
+    display: flex;
+    gap: 22px;
+    margin-bottom: 16px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .stat { text-align: center; }
+  .stat .n { font-size: 20px; font-weight: 500; color: #d7f5ff; }
+  .stat .l { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: #567b91; }
+
+  .board-wrap {
+    position: relative;
+    border-radius: 16px;
+    padding: 14px;
+    background: linear-gradient(160deg, #0d2a3d 0%, #081b29 100%);
+    border: 1px solid #1c3d52;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.6), inset 0 0 40px rgba(143,227,255,0.03);
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    max-width: 512px;
+    height: auto;
+    border-radius: 8px;
+    background: #04101a;
+    touch-action: none;
+  }
+
+  .win-banner {
+    position: absolute;
+    inset: 14px;
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .win-banner.show { display: flex; }
+  .win-banner .msg {
+    font-size: 15px;
+    font-weight: 500;
+    color: #baf3ff;
+    background: rgba(4,16,26,0.72);
+    padding: 8px 18px;
+    border-radius: 999px;
+    border: 1px solid rgba(186,243,255,0.35);
+    margin-bottom: 18px;
+    animation: floatIn 0.6s ease both;
+  }
+  @keyframes floatIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .controls { margin-top: 22px; display: flex; align-items: center; gap: 28px; }
+
+  .dpad {
+    display: grid;
+    grid-template-columns: 40px 40px 40px;
+    grid-template-rows: 40px 40px 40px;
+    gap: 4px;
+  }
+  .dpad button {
+    background: #0e2a3c;
+    border: 1px solid #1e4459;
+    color: #9fe0ff;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, transform 0.1s;
+    padding: 0;
+  }
+  .dpad button:hover { background: #14374d; }
+  .dpad button:active { transform: scale(0.92); background: #1c4a63; }
+  .dpad .up { grid-column: 2; grid-row: 1; }
+  .dpad .left { grid-column: 1; grid-row: 2; }
+  .dpad .right { grid-column: 3; grid-row: 2; }
+  .dpad .down { grid-column: 2; grid-row: 3; }
+
+  .side-btns { display: flex; flex-direction: column; gap: 10px; }
+  .action-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid #2b5670;
+    color: #a9d6ec;
+    padding: 10px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .action-btn:hover { background: rgba(143,227,255,0.08); border-color: #4a90ac; }
+
+  .hint { margin-top: 16px; font-size: 12px; color: #4a7085; text-align: center; }
+
+  @media (max-width: 480px) { .controls { gap: 16px; } }
+</style>
+</head>
+<body>
+
+  <p class="eyebrow">nothing here says ice. yet.</p>
+  <h1>Ice Maze</h1>
+  <p class="sub">Fog covers everything except the ground right under your feet. Find your way from the entrance to the exit — the word hidden in the walls only becomes visible once you've reached it.</p>
+
+  <div class="stats">
+    <div class="stat"><div class="n" id="stepCount">0</div><div class="l">Steps</div></div>
+    <div class="stat"><div class="n" id="timeCount">0:00</div><div class="l">Time</div></div>
+  </div>
+
+  <div class="board-wrap">
+    <canvas id="maze"></canvas>
+    <div class="win-banner" id="winBanner">
+      <div class="msg" id="winMsg">The fog lifts. It was ICE all along.</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="dpad">
+      <button class="up" data-dir="N" aria-label="Move up">&#9650;</button>
+      <button class="left" data-dir="W" aria-label="Move left">&#9664;</button>
+      <button class="right" data-dir="E" aria-label="Move right">&#9654;</button>
+      <button class="down" data-dir="S" aria-label="Move down">&#9660;</button>
+    </div>
+    <div class="side-btns">
+      <button class="action-btn" id="newMazeBtn">New maze</button>
+      <button class="action-btn" id="revealBtn">Give up &amp; reveal</button>
+    </div>
+  </div>
+
+  <p class="hint">Arrow keys or WASD also work. The maze is regenerated fresh each time, but the word is always waiting at the end.</p>
+
+<script>
+(function () {
+  var COLS = 19, ROWS = 21, CELL = 28;
+  var canvas = document.getElementById('maze');
+  var ctx = canvas.getContext('2d');
+  canvas.width = COLS * CELL;
+  canvas.height = ROWS * CELL;
+
+  // 5x3 bitmaps per letter, stamped into the maze floor. Cells marked '1'
+  // are forced OPEN (part of the corridor) so the word is walkable path,
+  // not just paint -- you actually have to cross through it to finish.
+  var LETTERS = {
+    I: ["111","010","010","010","111"],
+    C: ["111","100","100","100","111"],
+    E: ["111","100","111","100","111"]
+  };
+
+  var letterMask = [];
+  for (var r = 0; r < ROWS; r++) { letterMask.push(new Array(COLS).fill(false)); }
+
+  function stampLetter(bitmap, colStart, rowStart) {
+    for (var rr = 0; rr < 5; rr++) {
+      for (var cc = 0; cc < 3; cc++) {
+        if (bitmap[rr][cc] === '1') {
+          letterMask[rowStart + rr][colStart + cc] = true;
+        }
+      }
+    }
+  }
+
+  var letterRowStart = Math.floor((ROWS - 5) / 2);
+  var letterColStart = Math.floor((COLS - 11) / 2);
+  stampLetter(LETTERS.I, letterColStart, letterRowStart);
+  stampLetter(LETTERS.C, letterColStart + 4, letterRowStart);
+  stampLetter(LETTERS.E, letterColStart + 8, letterRowStart);
+
+  var cells, visited, revealed, player, goal, steps, startTime, timerHandle, won;
+
+  function makeGrid() {
+    var g = [];
+    for (var r = 0; r < ROWS; r++) {
+      var row = [];
+      for (var c = 0; c < COLS; c++) row.push({ N: true, S: true, E: true, W: true });
+      g.push(row);
+    }
+    return g;
+  }
+
+  function idx(c, r) { return r * COLS + c; }
+
+  // Recursive-backtracker carve, but whenever it's choosing which neighbor
+  // to open into, letter cells are preferred so the corridor tends to pass
+  // straight through the hidden word instead of skirting around it.
+  function generateMaze() {
+    cells = makeGrid();
+    var seen = new Array(COLS * ROWS).fill(false);
+    var stack = [[0, 0]];
+    seen[idx(0, 0)] = true;
+    var dirs = [
+      { name: 'N', dc: 0, dr: -1, opp: 'S' },
+      { name: 'S', dc: 0, dr: 1, opp: 'N' },
+      { name: 'E', dc: 1, dr: 0, opp: 'W' },
+      { name: 'W', dc: -1, dr: 0, opp: 'E' }
+    ];
+    while (stack.length) {
+      var cur = stack[stack.length - 1];
+      var c = cur[0], r = cur[1];
+      var options = [];
+      for (var i = 0; i < dirs.length; i++) {
+        var d = dirs[i];
+        var nc = c + d.dc, nr = r + d.dr;
+        if (nc >= 0 && nc < COLS && nr >= 0 && nr < ROWS && !seen[idx(nc, nr)]) options.push(d);
+      }
+      if (options.length === 0) { stack.pop(); continue; }
+      var letterOpts = options.filter(function (d) { return letterMask[r + d.dr] && letterMask[r + d.dr][c + d.dc]; });
+      var pool = letterOpts.length ? letterOpts : options;
+      var pick = pool[Math.floor(Math.random() * pool.length)];
+      var nc2 = c + pick.dc, nr2 = r + pick.dr;
+      cells[r][c][pick.name] = false;
+      cells[nr2][nc2][pick.opp] = false;
+      seen[idx(nc2, nr2)] = true;
+      stack.push([nc2, nr2]);
+    }
+  }
+
+  function resetGame() {
+    generateMaze();
+    visited = new Array(ROWS);
+    revealed = new Array(ROWS);
+    for (var r = 0; r < ROWS; r++) {
+      visited[r] = new Array(COLS).fill(false);
+      revealed[r] = new Array(COLS).fill(false);
+    }
+    player = { c: 0, r: 0 };
+    goal = { c: COLS - 1, r: ROWS - 1 };
+    visited[0][0] = true;
+    updateRevealed();
+    steps = 0;
+    won = false;
+    startTime = Date.now();
+    document.getElementById('stepCount').textContent = '0';
+    document.getElementById('timeCount').textContent = '0:00';
+    document.getElementById('winBanner').classList.remove('show');
+    document.getElementById('winMsg').textContent = 'The fog lifts. It was ICE all along.';
+    if (timerHandle) clearInterval(timerHandle);
+    timerHandle = setInterval(tick, 500);
+    draw();
+  }
+
+  // Only the tile you're standing on plus its 4 neighbors are ever
+  // revealed -- everything else stays under fog, including the letters,
+  // until you finish and the whole board opens up at once.
+  function updateRevealed() {
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        if (!visited[r][c]) continue;
+        revealed[r][c] = true;
+        if (r > 0) revealed[r - 1][c] = true;
+        if (r < ROWS - 1) revealed[r + 1][c] = true;
+        if (c > 0) revealed[r][c - 1] = true;
+        if (c < COLS - 1) revealed[r][c + 1] = true;
+      }
+    }
+  }
+
+  function tick() {
+    if (won) return;
+    var secs = Math.floor((Date.now() - startTime) / 1000);
+    var m = Math.floor(secs / 60), s = secs % 60;
+    document.getElementById('timeCount').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  function tryMove(dir) {
+    if (won) return;
+    var c = player.c, r = player.r;
+    var cell = cells[r][c];
+    if (cell[dir]) return;
+    var nc = c, nr = r;
+    if (dir === 'N') nr--;
+    if (dir === 'S') nr++;
+    if (dir === 'E') nc++;
+    if (dir === 'W') nc--;
+    player.c = nc; player.r = nr;
+    visited[nr][nc] = true;
+    updateRevealed();
+    steps++;
+    document.getElementById('stepCount').textContent = steps;
+    if (nc === goal.c && nr === goal.r) winGame();
+    draw();
+  }
+
+  function winGame() {
+    won = true;
+    clearInterval(timerHandle);
+    for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) revealed[r][c] = true;
+    document.getElementById('winBanner').classList.add('show');
+    animateWin();
+  }
+
+  function revealAll() {
+    if (won) return;
+    for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) { revealed[r][c] = true; visited[r][c] = true; }
+    won = true;
+    clearInterval(timerHandle);
+    document.getElementById('winMsg').textContent = 'Here it is — ICE.';
+    document.getElementById('winBanner').classList.add('show');
+    animateWin();
+  }
+
+  var animFrame = null;
+  function animateWin() {
+    var start = Date.now();
+    function step() {
+      draw(Date.now() - start);
+      if (won) animFrame = requestAnimationFrame(step);
+    }
+    if (animFrame) cancelAnimationFrame(animFrame);
+    step();
+  }
+
+  function draw(pulseT) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#04101a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    var pulse = pulseT !== undefined ? (Math.sin(pulseT / 400) * 0.5 + 0.5) : 0;
+
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        var x = c * CELL, y = r * CELL;
+
+        if (!revealed[r][c]) {
+          ctx.fillStyle = '#071722';
+          ctx.fillRect(x, y, CELL, CELL);
+          continue;
+        }
+
+        var isVisited = visited[r][c];
+        var isLetter = letterMask[r][c];
+        var floorColor;
+        if (won && isLetter) {
+          var glow = 0.55 + pulse * 0.45;
+          var rr = Math.round(122 + 60 * glow);
+          var gg = Math.round(214 + 30 * glow);
+          floorColor = 'rgb(' + rr + ',' + gg + ',255)';
+        } else if (isVisited) {
+          floorColor = '#123244';
+        } else {
+          floorColor = '#0a2233';
+        }
+        ctx.fillStyle = floorColor;
+        ctx.fillRect(x, y, CELL, CELL);
+
+        var cell = cells[r][c];
+        ctx.strokeStyle = isVisited ? '#3f7fa0' : '#254f66';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        if (cell.N) { ctx.moveTo(x, y); ctx.lineTo(x + CELL, y); }
+        if (cell.S) { ctx.moveTo(x, y + CELL); ctx.lineTo(x + CELL, y + CELL); }
+        if (cell.W) { ctx.moveTo(x, y); ctx.lineTo(x, y + CELL); }
+        if (cell.E) { ctx.moveTo(x + CELL, y); ctx.lineTo(x + CELL, y + CELL); }
+        ctx.stroke();
+      }
+    }
+
+    // entrance marker
+    if (revealed[0][0]) {
+      ctx.fillStyle = 'rgba(111,224,160,0.9)';
+      ctx.fillRect(2, 2, CELL - 4, CELL - 4);
+    }
+
+    // exit marker
+    var gx = goal.c * CELL, gy = goal.r * CELL;
+    if (revealed[goal.r][goal.c]) {
+      ctx.fillStyle = 'rgba(255,150,120,0.85)';
+      ctx.save();
+      ctx.translate(gx + CELL / 2, gy + CELL / 2);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-6, -6, 12, 12);
+      ctx.restore();
+    }
+
+    // player
+    var px = player.c * CELL + CELL / 2, py = player.r * CELL + CELL / 2;
+    ctx.beginPath();
+    ctx.arc(px, py, 7, 0, Math.PI * 2);
+    ctx.fillStyle = '#8fe3ff';
+    ctx.shadowColor = '#8fe3ff';
+    ctx.shadowBlur = 12;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  document.querySelectorAll('.dpad button').forEach(function (btn) {
+    btn.addEventListener('click', function () { tryMove(btn.getAttribute('data-dir')); });
+  });
+
+  window.addEventListener('keydown', function (e) {
+    var map = { ArrowUp: 'N', ArrowDown: 'S', ArrowLeft: 'W', ArrowRight: 'E',
+                w: 'N', s: 'S', a: 'W', d: 'E', W: 'N', S: 'S', A: 'W', D: 'E' };
+    if (map[e.key]) { e.preventDefault(); tryMove(map[e.key]); }
+  });
+
+  var touchStart = null;
+  canvas.addEventListener('touchstart', function (e) {
+    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  });
+  canvas.addEventListener('touchend', function (e) {
+    if (!touchStart) return;
+    var dx = e.changedTouches[0].clientX - touchStart.x;
+    var dy = e.changedTouches[0].clientY - touchStart.y;
+    if (Math.abs(dx) > Math.abs(dy)) { if (Math.abs(dx) > 20) tryMove(dx > 0 ? 'E' : 'W'); }
+    else { if (Math.abs(dy) > 20) tryMove(dy > 0 ? 'S' : 'N'); }
+    touchStart = null;
+  });
+
+  document.getElementById('newMazeBtn').addEventListener('click', resetGame);
+  document.getElementById('revealBtn').addEventListener('click', revealAll);
+
+  resetGame();
+})();
+</script>
+</body>
+</html>
